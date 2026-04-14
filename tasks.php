@@ -100,11 +100,11 @@ if (isset($_GET["status"])) {
 }
 
 /* =========================
-   LOAD TASKS
+   LOAD TASKS (ONLY NOT COMPLETED)
 ========================= */
 $stmt = $conn->prepare("
     SELECT * FROM tasks 
-    WHERE user_id=? 
+    WHERE user_id=? AND status != 'completed'
     ORDER BY deadline ASC
 ");
 $stmt->bind_param("i", $user_id);
@@ -123,11 +123,15 @@ $result = $stmt->get_result();
 
 <div class="container">
 
+    <!-- NAVBAR -->
     <div class="topbar">
         <h2>Academic Planner</h2>
         <div>
             <a href="dashboard.php">Dashboard</a>
             <a href="timetable.php">Timetable</a>
+            <a href="tasks.php" class="active">Tasks</a>
+            <a href="study_preferences.php">Preferences</a>
+            <a href="planner.php">Planner</a>
             <a href="logout.php">Logout</a>
         </div>
     </div>
@@ -180,6 +184,10 @@ $result = $stmt->get_result();
 
             <h2>Your Tasks</h2>
 
+            <?php if ($result->num_rows == 0): ?>
+                <p class="empty">No tasks available</p>
+            <?php endif; ?>
+
             <?php while ($row = $result->fetch_assoc()): ?>
 
                 <div class="event <?php echo $row['status']; ?>">
@@ -201,8 +209,8 @@ $result = $stmt->get_result();
                             class="edit"
                             onclick="editTask(
                                 '<?php echo $row['task_id']; ?>',
-                                '<?php echo $row['title']; ?>',
-                                '<?php echo $row['description']; ?>',
+                                '<?php echo htmlspecialchars($row['title'], ENT_QUOTES); ?>',
+                                '<?php echo htmlspecialchars($row['description'], ENT_QUOTES); ?>',
                                 '<?php echo $row['difficulty']; ?>',
                                 '<?php echo $row['priority']; ?>',
                                 '<?php echo $row['estimated_time']; ?>',
@@ -217,15 +225,13 @@ $result = $stmt->get_result();
                             Delete
                         </a>
 
-                        <!-- STATUS BUTTON -->
+                        <!-- STATUS -->
                         <a class="edit" href="?status=<?php echo $row['task_id']; ?>">
 
                             <?php if ($row['status'] == "pending"): ?>
                                 Start
-                            <?php elseif ($row['status'] == "in_progress"): ?>
-                                Finish
                             <?php else: ?>
-                                Reset
+                                Finish
                             <?php endif; ?>
 
                         </a>
