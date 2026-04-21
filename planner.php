@@ -2,72 +2,78 @@
 session_start();
 require "db.php";
 
+/* DEBUG */
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 if (!isset($_SESSION["user_id"])) {
     header("Location: index.php");
     exit();
 }
 
 $user_id = $_SESSION["user_id"];
-
 $plan = [];
 $error = "";
-$generated = false;
 
-/* =========================
-   DELETE SESSION
-========================= */
-if (isset($_GET["delete"])) {
+/* update errors */
+$update_errors = $_SESSION["update_errors"] ?? [];
+unset($_SESSION["update_errors"]);
 
-    $id = $_GET["delete"];
+/* =========================================================
+   GET PLAN START DATE FROM DB (SAFE FIX)
+========================================================= */
+$stmt = $conn->prepare("
+    SELECT plan_start_date FROM study_plan_info WHERE user_id=?
+");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$res = $stmt->get_result();
 
-    $stmt = $conn->prepare("DELETE FROM study_plan WHERE id=? AND user_id=?");
-    $stmt->bind_param("ii", $id, $user_id);
-    $stmt->execute();
+$row = $res->fetch_assoc();
 
-    header("Location: planner.php");
-    exit();
+/* ✅ FIX: prevent crash if no row */
+if ($row && isset($row['plan_start_date'])) {
+    $start = $row['plan_start_date'];
+} else {
+    $start = date("Y-m-d");
 }
 
-/* =========================
-   UPDATE SESSION
-========================= */
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["update"])) {
+/* =========================================================
+   GENERATE / REGENERATE PLAN
+========================================================= */
+if (isset($_POST["generate_plan"])) {
 
-    $id = $_POST["plan_id"];
-    $start = $_POST["start_time"];
-    $end = $_POST["end_time"];
+    $today = new DateTime();
+    $plan_start = $today->format("Y-m-d");
 
+    // ✅ SAVE PLAN START DATE IN DB
     $stmt = $conn->prepare("
-        UPDATE study_plan
-        SET start_time=?, end_time=?
-        WHERE id=? AND user_id=?
+        REPLACE INTO study_plan_info (user_id, plan_start_date)
+        VALUES (?, ?)
     ");
-    $stmt->bind_param("ssii", $start, $end, $id, $user_id);
+    $stmt->bind_param("is", $user_id, $plan_start);
     $stmt->execute();
 
-    header("Location: planner.php");
-    exit();
-}
+    $week_start = $plan_start;
+    $week_end = (new DateTime($week_start))->modify("+6 days")->format("Y-m-d");
 
-/* =========================
-   GENERATE PLAN
-========================= */
-if (isset($_POST["generate"])) {
-
-    $generated = true;
-
-    $stmt = $conn->prepare("DELETE FROM study_plan WHERE user_id=?");
+    // delete old plan
+    // delete ALL old sessions (FIX)
+    $stmt = $conn->prepare("
+    DELETE FROM study_plan
+    WHERE user_id=?
+    ");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
 
-    /* GET PREFERENCES */
+    // preferences
     $stmt = $conn->prepare("SELECT * FROM study_preferences WHERE user_id=?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $pref = $stmt->get_result()->fetch_assoc();
 
     if (!$pref) {
-        $error = "Please set preferences first.";
+        $error = "Set preferences first.";
     } else {
 
         $start_time = $pref['start_time'];
@@ -75,148 +81,177 @@ if (isset($_POST["generate"])) {
         $max_hours = $pref['max_hours'];
         $session_length = $pref['session_length'];
 
-        /* GET TASKS */
+        // tasks
         $stmt = $conn->prepare("
             SELECT *,
-            CASE 
-                WHEN priority = 'High' THEN 3
-                WHEN priority = 'Medium' THEN 2
-                WHEN priority = 'Low' THEN 1
-            END AS priority_value
+            CASE WHEN priority='High' THEN 3
+                 WHEN priority='Medium' THEN 2
+                 ELSE 1 END AS priority_value
             FROM tasks
             WHERE user_id=? AND status IN ('pending','in_progress')
             ORDER BY deadline ASC, priority_value DESC
         ");
         $stmt->bind_param("i", $user_id);
         $stmt->execute();
-        $result = $stmt->get_result();
 
         $tasks = [];
-        while ($row = $result->fetch_assoc()) {
-            $row['remaining_time'] = $row['estimated_time'];
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
             $tasks[] = $row;
         }
 
-        if (empty($tasks)) {
-            $error = "Add tasks first.";
-        } else {
+        // timetable
+        $stmt = $conn->prepare("SELECT * FROM timetable WHERE user_id=?");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
 
-            /* GET TIMETABLE */
-            $stmt = $conn->prepare("SELECT * FROM timetable WHERE user_id=?");
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $res = $stmt->get_result();
+        $busy = [];
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $busy[$row['day_of_week']][] = $row;
+        }
 
-            $busy = [];
-            while ($row = $res->fetch_assoc()) {
-                $busy[$row['day_of_week']][] = $row;
-            }
+        // dates
+        $dates = [];
+        for ($i = 0; $i < 7; $i++) {
+            $date = (clone new DateTime($plan_start))->modify("+$i day");
+            $dates[] = [
+                "day" => $date->format("l"),
+                "full" => $date->format("Y-m-d")
+            ];
+        }
 
-            /* GENERATE DATES (7 DAYS) */
-            $dates = [];
-            $today = new DateTime();
+        // tracking
+        $day_time = [];
+        $day_usage = [];
 
-            for ($i = 0; $i < 7; $i++) {
-                $date = clone $today;
-                $date->modify("+$i day");
+        foreach ($dates as $d) {
+            $day_time[$d['full']] = $start_time;
+            $day_usage[$d['full']] = 0;
+        }
 
-                $dates[] = [
-                    "day" => $date->format("l"),
-                    "display" => $date->format("D d M"),
-                    "full" => $date->format("Y-m-d")
-                ];
-            }
+        // existing plan
+        $stmt = $conn->prepare("
+            SELECT study_date, start_time, end_time
+            FROM study_plan
+            WHERE user_id=?
+            AND study_date BETWEEN ? AND ?
+        ");
+        $stmt->bind_param("iss", $user_id, $week_start, $week_end);
+        $stmt->execute();
 
-            /* HELPERS */
-            function addHours($t, $h) {
-                return date("H:i", strtotime("+$h hours", strtotime($t)));
-            }
+        $res = $stmt->get_result();
+        $existing = [];
 
-            function addMinutes($t, $m) {
-                return date("H:i", strtotime("+$m minutes", strtotime($t)));
-            }
+        while ($row = $res->fetch_assoc()) {
+            $existing[$row['study_date']][] = $row;
+        }
 
-            function isBusy($day, $start, $end, $busy) {
-                if (!isset($busy[$day])) return false;
-                foreach ($busy[$day] as $b) {
-                    if ($start < $b['end_time'] && $end > $b['start_time']) {
-                        return true;
-                    }
-                }
-                return false;
-            }
+        // generation loop
+        foreach ($tasks as $task) {
 
-            /* GENERATE */
-            $task_index = 0;
-            $total_tasks = count($tasks);
+            $remaining = $task['estimated_time'];
+            $dayIndex = 0;
+            $attempts = 0;
 
-            foreach ($dates as $d) {
+            while ($remaining > 0 && $attempts < 1000) {
 
+                $attempts++;
+
+                $d = $dates[$dayIndex % 7];
+                $date = $d['full'];
                 $day = $d['day'];
-                $study_date = $d['full'];
 
-                $current_time = $start_time;
-                $used_hours = 0;
-                $loop_guard = 0;
+                $start_time_slot = $day_time[$date];
 
-                while ($used_hours < $max_hours && $total_tasks > 0) {
+                $dur = min($session_length, $remaining);
 
-                    $loop_guard++;
-                    if ($loop_guard > 500) break;
+                $end_ts = strtotime("+$dur hours", strtotime($start_time_slot));
+                $end = date("H:i", $end_ts);
 
-                    $task = &$tasks[$task_index];
-
-                    if ($task['remaining_time'] <= 0) {
-                        $task_index = ($task_index + 1) % $total_tasks;
-                        continue;
-                    }
-
-                    $duration = min($session_length, $task['remaining_time']);
-                    $end = addHours($current_time, $duration);
-
-                    if ($end > $end_time) break;
-
-                    if (isBusy($day, $current_time, $end, $busy)) {
-                        $current_time = addMinutes($current_time, 30);
-                        continue;
-                    }
-
-                    /* SAVE */
-                    $stmt = $conn->prepare("
-                        INSERT INTO study_plan
-                        (user_id, task_id, task_title, day_of_week, study_date, start_time, end_time, session_duration)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->bind_param(
-                        "iisssssi",
-                        $user_id,
-                        $task['task_id'],
-                        $task['title'],
-                        $day,
-                        $study_date,
-                        $current_time,
-                        $end,
-                        $duration
-                    );
-                    $stmt->execute();
-
-                    $task['remaining_time'] -= $duration;
-                    $used_hours += $duration;
-
-                    $current_time = addMinutes($end, 30);
-                    $task_index = ($task_index + 1) % $total_tasks;
+                if ($end > $end_time) {
+                    $dayIndex++;
+                    continue;
                 }
+
+                if ($day_usage[$date] + $dur > $max_hours) {
+                    $dayIndex++;
+                    continue;
+                }
+
+                $conflict = false;
+
+                if (!empty($busy[$day])) {
+                    foreach ($busy[$day] as $b) {
+                        if ($start_time_slot < $b['end_time'] && $end > $b['start_time']) {
+                            $conflict = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!empty($existing[$date])) {
+                    foreach ($existing[$date] as $s) {
+                        if ($start_time_slot < $s['end_time'] && $end > $s['start_time']) {
+                            $conflict = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ($conflict) {
+                    $day_time[$date] = date("H:i", strtotime($start_time_slot . " +30 minutes"));
+                    continue;
+                }
+
+                // insert
+                $stmt = $conn->prepare("
+                    INSERT INTO study_plan
+                    (user_id, task_id, task_title, day_of_week, study_date, start_time, end_time, session_duration)
+                    VALUES (?,?,?,?,?,?,?,?)
+                ");
+
+                $stmt->bind_param(
+                    "iisssssi",
+                    $user_id,
+                    $task['task_id'],
+                    $task['title'],
+                    $day,
+                    $date,
+                    $start_time_slot,
+                    $end,
+                    $dur
+                );
+
+                $stmt->execute();
+
+                $day_time[$date] = date("H:i", strtotime($end . " +30 minutes"));
+                $day_usage[$date] += $dur;
+
+                $remaining -= $dur;
+                $dayIndex++;
             }
         }
+
+        // refresh start
+        $start = $plan_start;
     }
 }
 
-/* =========================
-   LOAD PLAN FROM DB
-========================= */
-$stmt = $conn->prepare("SELECT * FROM study_plan WHERE user_id=? ORDER BY study_date, start_time");
-$stmt->bind_param("i", $user_id);
+/* =========================================================
+   LOAD PLAN
+========================================================= */
+$end = (new DateTime($start))->modify("+6 days")->format("Y-m-d");
+
+$stmt = $conn->prepare("
+    SELECT * FROM study_plan
+    WHERE user_id=?
+    AND study_date BETWEEN ? AND ?
+    ORDER BY study_date, start_time
+");
+$stmt->bind_param("iss", $user_id, $start, $end);
 $stmt->execute();
+
 $res = $stmt->get_result();
 
 while ($row = $res->fetch_assoc()) {
@@ -235,76 +270,77 @@ while ($row = $res->fetch_assoc()) {
 
 <div class="container">
 
-    <div class="topbar">
-        <h2>Academic Planner</h2>
-        <div>
-            <a href="dashboard.php">Dashboard</a>
-            <a href="timetable.php">Timetable</a>
-            <a href="tasks.php">Tasks</a>
-            <a href="study_preferences.php">Preferences</a>
-            <a href="planner.php" class="active">Planner</a>
-            <a href="logout.php">Logout</a>
-        </div>
-    </div>
+<div class="topbar">
+    <h2>Academic Planner</h2>
+    <a href="dashboard.php">Dashboard</a>
+    <a href="timetable.php">Timetable</a>
+    <a href="tasks.php">Tasks</a>
+    <a href="study_preferences.php">Preferences</a>
+    <a href="planner.php">Planner</a>
+</div>
 
-    <div class="card">
+<div class="card">
 
-        <h2>Study Planner</h2>
+<h2>Study Planner</h2>
 
-        <form method="POST">
-            <button name="generate">Generate Study Plan</button>
-        </form>
+<form method="POST">
+    <button name="generate_plan"
+        onclick="return confirm('This will replace your current plan. Continue?')">
+        Generate / Regenerate Plan
+    </button>
+</form>
 
-        <br>
+<?php if ($error): ?>
+<p style="color:red;"><?= $error ?></p>
+<?php endif; ?>
 
-        <?php if ($error): ?>
-            <p style="color:red;"><?php echo $error; ?></p>
-        <?php endif; ?>
+<div class="calendar">
 
-        <div class="calendar">
+<?php
+for ($i = 0; $i < 7; $i++) {
+    $date = (clone new DateTime($start))->modify("+$i day");
+    $d = $date->format("Y-m-d");
+    $sessions = $plan[$d] ?? [];
+?>
 
-        <?php foreach ($plan as $date => $sessions): ?>
+<div class="day-column">
+<div class="header"><?= $date->format("D d M") ?></div>
 
-            <div class="day-column">
+<?php foreach ($sessions as $s): ?>
 
-                <div class="header">
-                    <?php echo date("D d M", strtotime($date)); ?>
-                </div>
+<form method="POST" action="update_session.php" class="event">
 
-                <?php foreach ($sessions as $s): ?>
+<input type="hidden" name="id" value="<?= $s['id'] ?>">
 
-                    <div class="event">
+<div class="task-title">
+    <?= htmlspecialchars($s['task_title']) ?>
+</div>
 
-                        <strong><?php echo $s['task_title']; ?></strong><br>
-                        <?php echo $s['start_time']; ?> - <?php echo $s['end_time']; ?>
+<input type="date" name="study_date" value="<?= $s['study_date'] ?>">
 
-                        <div class="actions">
+<input type="time" name="start_time" value="<?= $s['start_time'] ?>">
 
-                            <!-- EDIT -->
-                            <form method="POST" style="display:flex; gap:5px;">
-                                <input type="hidden" name="plan_id" value="<?php echo $s['id']; ?>">
-                                <input type="time" name="start_time" value="<?php echo $s['start_time']; ?>">
-                                <input type="time" name="end_time" value="<?php echo $s['end_time']; ?>">
-                                <button name="update" class="edit">Save</button>
-                            </form>
+<input type="time" name="end_time" value="<?= $s['end_time'] ?>">
 
-                            <!-- DELETE -->
-                            <a class="delete" href="?delete=<?php echo $s['id']; ?>">Delete</a>
+<button type="submit">Update</button>
 
-                        </div>
+<?php if (!empty($update_errors[$s['id']])): ?>
+    <p style="color:red; margin:5px 0;">
+        <?= $update_errors[$s['id']] ?>
+    </p>
+<?php endif; ?>
 
-                    </div>
+</form>
 
-                <?php endforeach; ?>
+<?php endforeach; ?>
 
-            </div>
+</div>
 
-        <?php endforeach; ?>
+<?php } ?>
 
-        </div>
+</div>
 
-    </div>
-
+</div>
 </div>
 
 </body>
