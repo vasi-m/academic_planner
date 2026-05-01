@@ -1,6 +1,18 @@
-/* =========================
-   RESET
-========================= */
+/* Module colours */
+:root {
+    --module-colour-1: #533A71;
+    --module-colour-2: #6184D8;
+    --module-colour-3: #50C5B7;
+    --module-colour-4: #9CEC5B;
+    --module-colour-5: #F0F465;
+    --module-colour-6: #FF934F;
+    --module-colour-7: #7B506F;
+    --module-colour-8: #DBCDC6;
+    --module-colour-9: #772F1A;
+    --module-colour-10: #1F1A38;
+}
+
+/* Reset*/
 * {
     margin: 0;
     padding: 0;
@@ -8,25 +20,19 @@
     font-family: Arial, sans-serif;
 }
 
-/* =========================
-   BODY
-========================= */
+/* Page body styling */
 body {
     background: #f4f6f9;
     color: #333;
 }
 
-/* =========================
-   CONTAINER
-========================= */
+/* Container in each page */
 .container {
     padding: 20px;
 }
 
-/* =========================
-   TOP BAR
-========================= */
-.topbar {
+/* Consistent Navigation Bar */
+.navbar{
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -37,32 +43,66 @@ body {
     margin-bottom: 20px;
 }
 
-.topbar a {
+.navbar a {
     color: white;
     margin-left: 15px;
     text-decoration: none;
     font-weight: bold;
 }
 
-.topbar a:hover {
+.navbar a:hover {
     text-decoration: underline;
 }
- .topbar a.active {
-    text-decoration: underline;
-    font-weight: bold;
+
+.navbar a.active {
+    text-decoration: none;
+    background: rgba(255,255,255,0.2);
+    padding: 6px 10px;
+    border-radius: 6px;
 }
-/* =========================
-   MAIN LAYOUT
-========================= */
+
+
+/* Tablet: keep everything inline, just slightly smaller */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .navbar a {
+        font-size: 0.9rem;
+        margin-left: 10px;
+    }
+
+    .navbar h2 {
+        font-size: 1.4rem;
+    }
+}
+
+/* Mobile: allow wrapping, shrink text more */
+@media (max-width: 768px) {
+
+    .navbar {
+        flex-wrap: wrap;
+        padding: 12px 15px;
+    }
+
+    .navbar h2 {
+        width: 100%;
+        margin-bottom: 8px;
+        font-size: 1.2rem;
+    }
+
+    .navbar a {
+        font-size: 0.85rem;
+        margin-left: 10px;
+    }
+}
+
+
+/* Main layout for tasks and timetable page */
 .split {
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 20px;
 }
 
-/* =========================
-   CARDS
-========================= */
+/* Container */
 .card {
     background: white;
     padding: 20px;
@@ -70,9 +110,7 @@ body {
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-/* =========================
-   FORM
-========================= */
+/* Form styling for timetable and task page */
 label {
     display: block;
     margin-top: 10px;
@@ -90,6 +128,7 @@ select {
     font-size: 14px;
 }
 
+/* Button styling */
 button {
     width: 100%;
     padding: 12px;
@@ -99,7 +138,7 @@ button {
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: bold;
 }
 
@@ -107,194 +146,78 @@ button:hover {
     background: #094814;
 }
 
-/* =========================
-   WEEKLY CALENDAR
-========================= */
-.week {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 15px;
-    margin-top: 15px;
-}
-
-/* =========================
-   DAY COLUMN
-========================= */
-.day-column {
-    background: #ffffff;
-    border-radius: 10px;
-    padding: 10px;
-    min-height: 300px;
-    border: 1px solid #eee;
-}
-
-/* =========================
-   DAY HEADER
-========================= */
-.header {
-    background: #0B5E18;
-    color: white;
-    padding: 10px;
-    text-align: center;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-/* =========================
-   EVENTS
-========================= */
 .event {
-    background: #e8f5e9;
+    background: white;
     padding: 10px;
     border-radius: 8px;
     margin-bottom: 10px;
     font-size: 13px;
-    border-left: 4px solid #0B5E18;
+    border-left: 6px solid var(--module-colour);
+    position: relative;
 }
 
-.event strong {
-    font-size: 14px;
-}
-
-/* =========================
-   ACTIONS (FIXED INLINE ALIGNMENT)
-========================= */
+/* Action buttons styling*/
 .actions {
     margin-top: 8px;
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 8px;
+    gap: 2px;
 }
 
-/* FORCE IDENTICAL BUTTON LOOK */
 .actions .edit,
-.actions .delete {
+.actions .delete, 
+.actions .status
+{
     flex: 1;
     width: 100%;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
     height: 28px;
     padding: 0;
     margin: 0;
-
     font-size: 12px;
+    font-weight: bold;
     border-radius: 5px;
-
     text-decoration: none;
     border: none;
     cursor: pointer;
-
-    font-family: inherit;
-    line-height: 1;
-
-    box-sizing: border-box;
-
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
+    box-sizing : border-box;
 }
 
-/* EDIT */
 .actions .edit {
-    background: #2196F3;
+    background: #66C7C2;
     color: white;
 }
 
-/* DELETE */
 .actions .delete {
-    background: #f44336;
+    background: #E74659;
     color: white;
 }
 
-/* HOVER */
 .actions .edit:hover,
 .actions .delete:hover {
     opacity: 0.85;
 }
 
-/* =========================
-   EMPTY STATE
-========================= */
-.empty {
-    font-size: 12px;
-    color: #888;
-    text-align: center;
-    margin-top: 10px;
+/*Page description for each page */
+.page-description {
+    font-size: 0.85rem;
+    color: #555;
+    margin-top: 6px;
+    margin-bottom: 18px;
+    line-height: 1.5;
 }
+/* Responsive layout */
+@media (max-width: 1024px) { 
+    .split { grid-template-columns: 1fr; }
+ }
 
-@media (max-width: 1024px) and (max-height: 1366px) {
-
-    /* Stack layout: form first, timetable below */
-    .split {
-        grid-template-columns: 1fr;
-    }
-
-    /* KEEP laptop-style timetable (DO NOT collapse columns) */
-    .week {
-        grid-template-columns: repeat(5, 1fr);
-    }
-}
 @media (max-width: 600px) {
 
-    /* Stack form + timetable */
-    .split {
-        grid-template-columns: 1fr;
-    }
-
-    /* Force timetable into vertical layout */
-    .week {
-        grid-template-columns: 1fr;
-    }
-
-    /* Make each day full width */
-    .day-column {
-        width: 100%;
-    }
-
-    /* Optional: reduce spacing for mobile */
-    .container {
-        padding: 10px;
-    }
-
-    .card {
-        padding: 12px;
-    }
-
-    /* Make event text more readable on small screens */
-    .event {
-        font-size: 12px;
-    }
-
-    .header {
-        font-size: 14px;
-    }
-}
-
-.event {
-    position: relative;
-}
-
-.pending {
-    border-left: 4px solid #999;
-}
-
-.in_progress {
-    border-left: 4px solid #2196F3;
-}
-
-.completed {
-    border-left: 4px solid #4CAF50;
-    opacity: 0.6;
-    text-decoration: line-through;
-}
-
-.calendar {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 15px;
+    .split { grid-template-columns: 1fr; }
+    .container { padding: 10px; }
+    .card { padding: 12px;}
+    .event { font-size: 12px;}
 }
