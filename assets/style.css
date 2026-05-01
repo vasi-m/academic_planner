@@ -4,7 +4,7 @@
     box-sizing: border-box;
     font-family: Arial;
 }
-
+/*Background image */
 body {
     height: 100vh;
     background: url("background.jpg") center/cover no-repeat;
@@ -12,7 +12,7 @@ body {
     position: relative;
 }
 
-/* DARK OVERLAY */
+/* Dark overlay for the backgroung */
 body::before {
     content: "";
     position: absolute;
@@ -21,7 +21,7 @@ body::before {
     z-index: 0;
 }
 
-/* MAIN CONTAINER */
+/* Main container */
 .container {
     width: 100%;
     height: 100vh;
@@ -30,7 +30,7 @@ body::before {
     z-index: 1;
 }
 
-/* LEFT + RIGHT */
+/* Left and right side */
 .left, .right {
     flex: 1;
     display: flex;
@@ -38,7 +38,7 @@ body::before {
     justify-content: center;
 }
 
-/* LEFT SIDE */
+/* Left Side */
 .left {
     flex-direction: column;
     color: white;
@@ -51,18 +51,20 @@ body::before {
 }
 
 .left p {
-    margin-top: 10px;
-    max-width: 400px;
+    margin-top: 20px;
+    max-width: 500px;
+    font-size: 20px;
+    
 }
 
-/* RIGHT SIDE */
+/* Right side */
 .right {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* FORM BOX */
+/* The form container */
 .box {
     width: 360px;
     padding: 30px;
@@ -71,7 +73,7 @@ body::before {
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
 }
 
-/* TABS */
+/* Tabs */
 .tabs {
     display: flex;
     margin-bottom: 20px;
@@ -95,7 +97,7 @@ body::before {
     font-weight: bold;
 }
 
-/* INPUTS */
+/* Input fields */
 input {
     width: 100%;
     padding: 12px;
@@ -109,7 +111,7 @@ input:focus {
     border-color: #0B5E18;
 }
 
-/* BUTTON */
+/* Submit button styling */
 button[type="submit"] {
     width: 100%;
     padding: 12px;
@@ -124,21 +126,21 @@ button[type="submit"]:hover {
     background: #0B731B;
 }
 
-/* MESSAGE */
+/* Message */
 .msg {
     text-align: center;
     margin-bottom: 10px;
     font-size: 14px;
 }
 
-/* PASSWORD STRENGTH TEXT */
+/* Password strength text */
 .strength-text {
     font-size: 13px;
     margin-bottom: 5px;
     color: #333;
 }
 
-/* PASSWORD BAR */
+/* Password bar */
 .strength-bar {
     width: 100%;
     height: 6px;
@@ -155,7 +157,7 @@ button[type="submit"]:hover {
     background: red;
 }
 
-/* RESPONSIVE */
+/* Page responsive */
 @media (max-width: 768px) {
     .container {
         flex-direction: column;
@@ -170,7 +172,7 @@ button[type="submit"]:hover {
         width: 90%;
     }
 }
-
+ /* Checklist of the password strength */
 .checklist li {
     display: flex;
     align-items: center;
@@ -179,9 +181,9 @@ button[type="submit"]:hover {
     margin: 6px 0;
 }
 .checklist li .icon {
-    color: red; /* default ❌ color */
+    color: red; 
 }
 
 .checklist li.valid .icon {
-    color: green; /* ✔ when correct */
+    color: green; 
 }
