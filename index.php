@@ -8,29 +8,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $action = $_POST["action"];
 
-    // ---------------- REGISTER ----------------
+    //if user wants to register
     if ($action === "register") {
 
         $full_name = trim($_POST["full_name"]);
         $email = trim($_POST["email"]);
         $password = $_POST["password"];
 
-        // EMAIL VALIDATION
+        //if email is not valid, show the error message
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $message = "Invalid email format!";
+            $register_error = true;
         } 
         else if (strlen($password) < 8) {
             $message = "Password must be at least 8 characters!";
         } 
         else {
 
-            // CHECK IF EMAIL EXISTS
-            $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            //Check if email exists
+            $query = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+            $query->bind_param("s", $email);
+            $query->execute();
+            $result = $query->get_result();
 
-            if ($result->num_rows > 0) {
+            if ($query->num_rows > 0) {
                 $message = "Email already exists!";
             } else {
 
@@ -38,47 +39,51 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
 
                 // INSERT USER
-                $stmt = $conn->prepare("
+                $query = $conn->prepare("
                     INSERT INTO users (full_name, email, password)
                     VALUES (?, ?, ?)
                 ");
-                $stmt->bind_param("sss", $full_name, $email, $hashed);
-                $stmt->execute();
+                $query->bind_param("sss", $full_name, $email, $hashed);
+                $query->execute();
 
                 $message = "Registration successful! You can now log in.";
+                $registered = true;
             }
         }
     }
 
-    // ---------------- LOGIN ----------------
+    //When user wants to log in
     if ($action === "login") {
-
+        
         $email = trim($_POST["email"]);
         $password = $_POST["password"];
-
-        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        //query to check if the user has an account
+        $query = $conn->prepare("SELECT * FROM users WHERE email = ?");
+        $query->bind_param("s", $email);
+        $query->execute();
+        $result = $query->get_result();
 
         if ($result->num_rows === 1) {
 
             $user = $result->fetch_assoc();
-
+            //if the user has an account
             if (password_verify($password, $user["password"])) {
 
                 $_SESSION["user_id"] = $user["user_id"];
                 $_SESSION["full_name"] = $user["full_name"];
-
+                
+                //Load the dashboard page
                 header("Location: dashboard.php");
                 exit();
-
+            //If the password is incorrect, show message
             } else {
                 $message = "Incorrect password!";
+                $login_error = true;
             }
-
+        //If the account doesn't exist, show message
         } else {
             $message = "User not found!";
+            $login_error = true;
         }
     }
 }
@@ -106,7 +111,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         <div class="box">
 
-            <!-- TABS -->
+            <!-- Register and Login Tabs -->
             <div class="tabs">
                 <button class="tab active" onclick="showForm('register')">Register</button>
                 <button class="tab" onclick="showForm('login')">Login</button>
@@ -114,7 +119,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             <p class="msg"><?php echo $message; ?></p>
 
-            <!-- REGISTER FORM -->
+            <!-- Register Form -->
             <form id="registerForm" method="POST">
                 <input type="hidden" name="action" value="register">
 
@@ -123,7 +128,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 <input type="password" id="password" name="password" placeholder="Password" required>
 
-                <!-- PASSWORD STRENGTH -->
+                <!--Password Strength meter -->
                 <div id="strengthContainer" style="display:none;">
 
                     <div>Password Strength: <span id="strengthLabel">Weak</span></div>
@@ -140,17 +145,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     </ul>
 
                 </div>
-
+                <!--Register button -->
                 <button type="submit">Register</button>
             </form>
 
-            <!-- LOGIN FORM -->
+            <!-- Login Form -->
             <form id="loginForm" method="POST" style="display:none;">
                 <input type="hidden" name="action" value="login">
 
                 <input type="email" name="email" placeholder="Email" required>
                 <input type="password" name="password" placeholder="Password" required>
-
+                <!-- Login button--> 
                 <button type="submit">Login</button>
             </form>
 
@@ -161,7 +166,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </div>
 
 <script>
-// TAB SWITCH
+//Tab switch between Register and Login
 function showForm(type) {
 
     const login = document.getElementById("loginForm");
@@ -184,7 +189,7 @@ function showForm(type) {
     }
 }
 
-// PASSWORD CHECKLIST SYSTEM
+//Password 
 document.addEventListener("DOMContentLoaded", function () {
 
     const password = document.getElementById("password");
@@ -212,7 +217,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // RULES
+        //The rules for a strong password
         let hasLength = value.length >= 8;
         let hasUpper = /[A-Z]/.test(value);
         let hasNumber = /[0-9]/.test(value);
@@ -229,7 +234,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (hasNumber) strength++;
         if (hasSpecial) strength++;
 
-        // BAR
+        //The password strength bar
         if (strength <= 1) {
             strengthBar.style.width = "25%";
             strengthBar.style.background = "red";
@@ -249,7 +254,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
     });
-
+    //The icons in the rules updated as the user input the password
     function updateRule(element, condition) {
 
         const icon = element.querySelector(".icon");
@@ -267,6 +272,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 </script>
+<?php if (!empty($registered)): ?>
+<script>
+    // Switch to login tab after successful registration
+    showForm('login');
+</script>
+<!-- If a user inputs wrong email or password, stay in login tab -->
+<?php endif; ?>
+<?php if (!empty($login_error)): ?>
+<script>
+    showForm('login');
+</script>
+<?php endif; ?>
 
+<?php if (!empty($register_error)): ?>
+<script>
+    showForm('register');
+</script>
+<?php endif; ?>
 </body>
 </html>
