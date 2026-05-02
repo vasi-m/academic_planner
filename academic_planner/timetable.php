@@ -2,7 +2,7 @@
 //Start the session to track the logged-in user
 session_start();
 
-//Load database connection and module colour helper
+//Load database connection and module colour pattern
 require "db.php";
 require "module_colours.php";
 
@@ -23,7 +23,7 @@ $query->bind_param("i", $user_id);
 $query->execute();
 $modules = $query->get_result();
 
-//Add or update a timetable event//
+//Add or update a timetable event
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $event_id = $_POST["event_id"] ?? null;
@@ -184,7 +184,7 @@ Add all your fixed weekly commitments here: lectures, practicals, meetings, and 
 </p>
 
 <form method="POST">
-<!-- Form inpur fields -->
+<!-- Form input fields -->
 <input type="hidden" name="event_id" id="edit_id">
 
 <label>Day</label>
