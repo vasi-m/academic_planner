@@ -10,9 +10,7 @@ if (!isset($_SESSION["user_id"])) {
 
 $user_id = $_SESSION["user_id"];
 
-/* ------------------------------------------------------------
-   LOAD USER MODULES
------------------------------------------------------------- */
+// Load user modules
 $query = $conn->prepare("
     SELECT module_id, module_name
     FROM modules
@@ -22,9 +20,7 @@ $query->bind_param("i", $user_id);
 $query->execute();
 $modules = $query->get_result();
 
-/* ------------------------------------------------------------
-   GET LATEST PLAN DATE
------------------------------------------------------------- */
+//Get latest plan date 
 $query = $conn->prepare("
     SELECT MAX(plan_generated_at) AS latest
     FROM study_plan
@@ -47,9 +43,7 @@ if ($latest) {
     $plan_end = null;
 }
 
-/* ------------------------------------------------------------
-   ADD OR UPDATE TASK
------------------------------------------------------------- */
+//Add or update task
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $task_id = $_POST["task_id"] ?? "";
@@ -121,9 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     exit();
 }
 
-/* ------------------------------------------------------------
-   DELETE TASK
------------------------------------------------------------- */
+//Delete task
 if (isset($_GET["delete"])) {
 
     $task_id = $_GET["delete"];
@@ -142,9 +134,7 @@ if (isset($_GET["delete"])) {
     exit();
 }
 
-/* ------------------------------------------------------------
-   CHANGE STATUS
------------------------------------------------------------- */
+//Change task status
 if (isset($_GET["status"])) {
 
     $task_id = $_GET["status"];
@@ -189,9 +179,7 @@ if (isset($_GET["status"])) {
     exit();
 }
 
-/* ------------------------------------------------------------
-   RESTORE COMPLETED TASK
------------------------------------------------------------- */
+//Restore completed task
 if (isset($_GET["restore"])) {
 
     $task_id = $_GET["restore"];
@@ -211,9 +199,7 @@ if (isset($_GET["restore"])) {
     exit();
 }
 
-/* ------------------------------------------------------------
-   LOAD TASKS
------------------------------------------------------------- */
+//Load tasks
 $show_completed_task = isset($_GET["show_completed_task"]) && $_GET["show_completed_task"] == "1";
 
 if ($show_completed_task) {
@@ -289,7 +275,7 @@ $tasks = $query->get_result();
 
 <div class="split">
 
-<!-- TASK FORM -->
+<!-- Task form -->
 <div class="card" id="task-form">
 
 <h2>Add / Edit Task</h2>
@@ -343,7 +329,7 @@ Add and manage academic tasks, including revisions, assignments, readings, and e
 
 </div>
 
-<!-- TASK LIST -->
+<!-- Task list -->
 <div class="card" id="completed-tasks">
 
 <h2>Your Tasks</h2>
