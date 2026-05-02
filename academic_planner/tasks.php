@@ -1,8 +1,11 @@
 <?php
+//Start the session to track the logged-in user
 session_start();
+//Ensure database connection and module colours pattern
 require "db.php";
 require "module_colours.php";
 
+//If not logged in, redirect to Login page
 if (!isset($_SESSION["user_id"])) {
     header("Location: index.php");
     exit();
@@ -10,7 +13,7 @@ if (!isset($_SESSION["user_id"])) {
 
 $user_id = $_SESSION["user_id"];
 
-// Load user modules
+//Load user's modules
 $query = $conn->prepare("
     SELECT module_id, module_name
     FROM modules
@@ -20,7 +23,7 @@ $query->bind_param("i", $user_id);
 $query->execute();
 $modules = $query->get_result();
 
-//Get latest plan date 
+//Get latest plan date
 $query = $conn->prepare("
     SELECT MAX(plan_generated_at) AS latest
     FROM study_plan
@@ -35,6 +38,7 @@ $query->bind_param("i", $user_id);
 $query->execute();
 $latest = $query->get_result()->fetch_assoc()['latest'];
 
+//Calculate plan week range if a plan exists
 if ($latest) {
     $plan_start_date = date("Y-m-d", strtotime($latest));
     $plan_end = date("Y-m-d", strtotime($plan_start_date . " +6 days"));
@@ -43,7 +47,7 @@ if ($latest) {
     $plan_end = null;
 }
 
-//Add or update task
+//Add or update a task
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $task_id = $_POST["task_id"] ?? "";
@@ -61,7 +65,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         header("Location: tasks.php");
         exit();
     }
-
+    //Add new task
     if ($task_id == "") {
 
         $query = $conn->prepare("
@@ -84,7 +88,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $query->execute();
 
     } else {
-
+        //Update an existing task
         $query = $conn->prepare("
             UPDATE tasks
             SET title=?, module_id=?, description=?, difficulty=?, priority=?, estimated_time=?, deadline=?
@@ -110,7 +114,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $query->execute();
     }
-
     header("Location: tasks.php");
     exit();
 }
@@ -138,7 +141,7 @@ if (isset($_GET["delete"])) {
 if (isset($_GET["status"])) {
 
     $task_id = $_GET["status"];
-
+    //Load current status for this task
     $query = $conn->prepare("
         SELECT status
         FROM tasks
@@ -155,7 +158,7 @@ if (isset($_GET["status"])) {
         header("Location: tasks.php");
         exit();
     }
-
+    //Cycle through statuses
     if ($task['status'] == "pending") {
         $new_status = "in_progress";
     } elseif ($task['status'] == "in_progress") {
@@ -163,7 +166,7 @@ if (isset($_GET["status"])) {
     } else {
         $new_status = "pending";
     }
-
+    //Update status and the completed time
     $query = $conn->prepare("
         UPDATE tasks
         SET status=?, completed_time = IF(?='completed', estimated_time, 0)
@@ -179,7 +182,7 @@ if (isset($_GET["status"])) {
     exit();
 }
 
-//Restore completed task
+//Restore a completed task
 if (isset($_GET["restore"])) {
 
     $task_id = $_GET["restore"];
@@ -199,11 +202,11 @@ if (isset($_GET["restore"])) {
     exit();
 }
 
-//Load tasks
+// 
 $show_completed_task = isset($_GET["show_completed_task"]) && $_GET["show_completed_task"] == "1";
-
+//Load all tasks
 if ($show_completed_task) {
-
+     //Show all tasks except for the completed ones not in the current plan
     $query = $conn->prepare("
         SELECT t.*, m.module_name
         FROM tasks t
@@ -228,7 +231,7 @@ if ($show_completed_task) {
     $query->bind_param("is", $user_id, $latest);
 
 } else {
-
+    //Show only tasks with status in pending and in progress
     $query = $conn->prepare("
         SELECT t.*, m.module_name
         FROM tasks t
@@ -260,7 +263,7 @@ $tasks = $query->get_result();
 <body>
 
 <div class="container">
-
+<!-- Navigation bar-->
 <div class="navbar">
     <h2>Academic Planner</h2>
     <div>
@@ -275,7 +278,7 @@ $tasks = $query->get_result();
 
 <div class="split">
 
-<!-- Task form -->
+<!-- Task Form -->
 <div class="card" id="task-form">
 
 <h2>Add / Edit Task</h2>
@@ -284,7 +287,7 @@ Add and manage academic tasks, including revisions, assignments, readings, and e
 </p>
 
 <form method="POST">
-
+<!--Task form input fields -->
 <input type="hidden" name="task_id" id="task_id">
 
 <label>Title</label>
@@ -340,7 +343,7 @@ Add and manage academic tasks, including revisions, assignments, readings, and e
         Show Completed Tasks
     </label>
 </div>
-
+<!--If there is no task, show the text -->
 <?php if ($tasks->num_rows == 0): ?>
 <p class="empty">No tasks available</p>
 <?php endif; ?>
@@ -349,7 +352,7 @@ Add and manage academic tasks, including revisions, assignments, readings, and e
     
 
 <?php $module_colour = getModuleColour($task['module_id']); ?>
-
+<!--Task card with the module colour -->
 <div class="event <?= $task['status'] ?> <?= $task['status'] === 'completed' ? 'completed-task' : '' ?>"
      style="--module-colour: <?= $module_colour ?>;">
 
@@ -375,7 +378,7 @@ Status: <b class="status-text <?= $task['status'] ?>">
 <div class="actions">
 
 <?php if ($task['status'] !== 'completed'): ?>
-
+   <!--Edit button fills the form with its details -->
   <button type="button" class="edit"
 onclick='editTask(
     <?= json_encode($task["task_id"]) ?>,
@@ -390,18 +393,18 @@ onclick='editTask(
 Edit
 </button>
 
-
+    <!-- Status Button that changes-->
     <a class="status" href="?status=<?= $task['task_id'] ?>">
         <?= $task['status'] == "pending" ? "Start" : "Finish" ?>
     </a>
-
+    <!-- Delete task button -->
     <a class="delete" href="?delete=<?= $task['task_id'] ?>"
        onclick="return confirm('Delete this task?')">
        Delete
     </a>
 
 <?php else: ?>
-
+    <!-- Restore button for completed tasks-->
     <a class="restore" href="?restore=<?= $task['task_id'] ?>">
         Restore
     </a>
@@ -420,6 +423,7 @@ Edit
 </div>
 
 <script>
+//Fill the form with the selected tasks details
 function editTask(id, title, description, difficulty, priority, time, deadline, module) {
 
     document.getElementById("task_id").value = id;
@@ -433,11 +437,11 @@ function editTask(id, title, description, difficulty, priority, time, deadline, 
     if (deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
         document.getElementById("deadline").value = deadline;
     }
-
+    
     document.getElementById("module_name").value = module;
-
+    //Switch button to Upfate
     document.getElementById("btn").innerText = "Update";
-
+    //Scroll form into view on mobile screens
     if (window.innerWidth <= 900) {
         document.getElementById("task-form").scrollIntoView({
             behavior: "smooth",
@@ -445,7 +449,7 @@ function editTask(id, title, description, difficulty, priority, time, deadline, 
         });
     }
 }
-
+//Reload the page based on checkbox state
 function applyCheckboxFilter() {
     const show = document.getElementById("show_completed_task").checked ? 1 : 0;
     window.location.href = "tasks.php?show_completed_task=" + show;
@@ -453,12 +457,12 @@ function applyCheckboxFilter() {
 
 window.onload = function() {
     const urlParams = new URLSearchParams(window.location.search);
-
+    //If completed tasks are displayed, keep the checkbox checked
     if (urlParams.get("show_completed_task") === "1") {
         document.getElementById("show_completed_task").checked = true;
 
         const firstCompleted = document.querySelector(".event.completed-task");
-
+        //Scroll to the first completed task
         if (firstCompleted) {
             firstCompleted.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -468,4 +472,5 @@ window.onload = function() {
 
 </body>
 </html>
+
 
