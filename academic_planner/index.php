@@ -1,5 +1,7 @@
 <?php
+//Start the session to track the logged-in user
 session_start();
+//Ensure database connection
 require "db.php";
 
 $message = "";
