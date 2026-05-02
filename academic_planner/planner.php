@@ -1,5 +1,5 @@
 <?php
-////Start the session to track the logged-in user
+//Start the session to track the logged-in user
 session_start();
 //Ensure database connection and module colours pattern
 require "db.php";
@@ -128,8 +128,7 @@ if (isset($_POST["generate_plan"])) {
         //Track the next available time and how many hours have been scheduled
         $available_time = [];
         $hours_allocated = [];
-        
-        //Each day's available time starts with the 
+         
         foreach ($plan_dates as $d) {
             $available_time[$d['date']] = $start_time;
             $hours_allocated[$d['date']] = 0;
@@ -149,27 +148,28 @@ if (isset($_POST["generate_plan"])) {
                 $date = $d['date'];
                 $day = $d['day'];
                 
-                //
+                //Current available start time
                 $start_time_slot = $available_time[$date];
 
                 $session_start_ts = strtotime($start_time_slot);
                 $max_end_ts = strtotime($end_time);
-                //
+                //Determine session duration
                 $duration = min($session_length, $hours_remaining);
                 $session_end_ts = $session_start_ts + ($duration * 3600);
-
+                //If a session exceeds the available end time
                 if ($session_start_ts >= $max_end_ts || $session_end_ts > $max_end_ts) {
                     $day_index++;
                     continue;
                 }
 
                 $end = date("H:i", $session_end_ts);
-
+                
+                //If the max hours is achieved, skip add session
                 if ($hours_allocated[$date] + $duration > $max_hours) {
                     $day_index++;
                     continue;
                 }
-
+                //Check for timetable conflicts
                 $conflict = false;
 
                 if (!empty($busy_slots[$day])) {
@@ -180,13 +180,13 @@ if (isset($_POST["generate_plan"])) {
                         }
                     }
                 }
-
+                //If it conflicts move start time forward by 30 minutes
                 if ($conflict) {
                     $available_time[$date] = date("H:i", strtotime($start_time_slot . " +30 minutes"));
                     continue;
                 }
 
-                // INSERT NEW SESSION (NO user_id)
+                //Insert the study session
                 $query = $conn->prepare("
                     INSERT INTO study_plan
                     (task_id, day_of_week, study_date, start_time, end_time, session_duration, plan_generated_at)
@@ -205,7 +205,7 @@ if (isset($_POST["generate_plan"])) {
                 );
 
                 $query->execute();
-
+                //Update next available time and hours allocated
                 $available_time[$date] = date("H:i", strtotime($end . " +30 minutes"));
                 $hours_allocated[$date] += $duration;
 
@@ -215,11 +215,7 @@ if (isset($_POST["generate_plan"])) {
         }
     }
 }
-
-/* ============================================================
-   7. LOAD SESSIONS FOR LATEST PLAN
-   ============================================================ */
-
+ //Retrieve sessions for the latest generated plan
 $query = $conn->prepare("
     SELECT MAX(sp.plan_generated_at) AS latest
     FROM study_plan sp
@@ -248,13 +244,12 @@ $query->bind_param("is", $user_id, $latest_plan_timestamp);
 $query->execute();
 
 $result = $query->get_result();
+//Group sessions by study date
 while ($row = $result->fetch_assoc()) {
     $study_plan[$row['study_date']][] = $row;
 }
 
-/* ============================================================
-   LOAD TASK TITLES
-   ============================================================ */
+//Retrieve task titles
 $task_titles = [];
 $query = $conn->prepare("
     SELECT t.task_id, t.title
@@ -269,9 +264,7 @@ while ($task_row = $result->fetch_assoc()) {
     $task_titles[$task_row['task_id']] = $task_row['title'];
 }
 
-/* ============================================================
-   LOAD TIMETABLE EVENTS
-   ============================================================ */
+//Retrieve timetable events
 $query = $conn->prepare("
     SELECT te.*, m.module_name
     FROM timetable_events te
@@ -284,6 +277,7 @@ $query->execute();
 $result = $query->get_result();
 $timetable = [];
 
+//Group timetable events by day of week
 while ($row = $result->fetch_assoc()) {
     $timetable[$row['day_of_week']][] = $row;
 }
@@ -301,7 +295,7 @@ while ($row = $result->fetch_assoc()) {
 <body>
 
 <div class="container">
-
+<!-- Navigation bar -->
 <div class="navbar">
     <h2>Academic Planner</h2>
     <div>
@@ -322,6 +316,7 @@ This planner generates your personalised weekly study plan based on your timetab
 </p>
 
 <form method="POST">
+<!-- Generate button -->
     <button name="generate_plan"
         onclick="return confirm('Your new study plan will start from today. Make sure your timetable, tasks, and preferences are up to date.')">
         Generate / Regenerate Plan
@@ -336,15 +331,17 @@ This planner generates your personalised weekly study plan based on your timetab
 
 <?php for ($i = 0; $i < 7; $i++): ?>
 <?php
+//Calculate the date for the day column
 $date = (clone new DateTime($plan_start_date))->modify("+$i day");
 $d = $date->format("Y-m-d");
 $dow = $date->format("l");
 
+//Retrieve study sessions and timetable events for this day
 $sessions = $study_plan[$d] ?? [];
 $classes = $timetable[$dow] ?? [];
 
 $day_items = [];
-
+//Add timetable classes to the day's items
 foreach ($classes as $c) {
     $day_items[] = [
         "type" => "timetable",
@@ -354,7 +351,7 @@ foreach ($classes as $c) {
         "end" => $c['end_time']
     ];
 }
-
+//Add study sessions to the day's items
 foreach ($sessions as $s) {
     $day_items[] = [
         "type" => "session",
@@ -366,6 +363,7 @@ foreach ($sessions as $s) {
     ];
 }
 
+//Sort all items by start time
 usort($day_items, fn($a, $b) =>
     strtotime($a['start']) - strtotime($b['start'])
 );
@@ -380,6 +378,7 @@ usort($day_items, fn($a, $b) =>
 
     <?php if ($item['type'] == 'timetable'): ?>
         <?php $module_colour = getModuleColour($item['module_id']); ?>
+        <!-- Timetable event container -->
         <div class="event timetable" style="--module-colour: <?= $module_colour ?>;">
             <i class="fas fa-chalkboard-teacher"></i>
             <?= htmlspecialchars($item['title']) ?>
@@ -393,7 +392,7 @@ usort($day_items, fn($a, $b) =>
 
     <?php else: ?>
         <?php $module_colour = getModuleColour($item['module_id']); ?>
-
+        <!-- Editable study sessions -->
         <form method="POST" action="update_session.php" class="event session"
               style="--module-colour: <?= $module_colour ?>;">
 
@@ -404,22 +403,24 @@ usort($day_items, fn($a, $b) =>
 
             <input type="hidden" name="session_id" value="<?= $item['session_id'] ?>">
             <input type="date" name="study_date" value="<?= $d ?>">
-
+            
+            <!-- Session's start and end time in a row -->
             <div class="time-row">
     <input type="time" name="start_time" value="<?= date('H:i', strtotime($item['start'])) ?>">
     <span class="dash">—</span>
     <input type="time" name="end_time" value="<?= date('H:i', strtotime($item['end'])) ?>">
 </div>
 
-
+            <!-- Edit button --> 
             <button>Edit</button>
-
+             
+            <!--Error message display -->
             <?php if (!empty($edit_error_message[$item['session_id']])): ?>
                 <div class="error-message">
                     <?= htmlspecialchars($edit_error_message[$item['session_id']]) ?>
                 </div>
             <?php endif; ?>
-
+            <!-- Success message display-->
             <?php if ($edit_success_message == $item['session_id']): ?>
                 <div class="success-message">
                     Updated successfully
